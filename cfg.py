@@ -2,20 +2,17 @@
 
 import sys
 import hid # pip install hidapi
-from struct import pack
+from struct import pack, unpack
 
 VENDOR_ID = 0x2f68 
 PRODUCT_ID = 0x0082 # DURGOD Taurus K320:
 TIMEOUT = 200
 
-deviceCfg = next(device for device in hid.enumerate() if device['vendor_id'] == VENDOR_ID and device['product_id'] == PRODUCT_ID and device['interface_number'] == 2 )
-
-device = hid.device()
-device.open_path(deviceCfg['path'])
-
-PING    = b"\x00\x03\x07\xE3".ljust(64, b"\x00")
-RESET   = b"\x00\x03\x05\x80\x04\xff".ljust(64, b"\x00")
-SAVE    = b"\x00\x03\x05\x82".ljust(64, b"\x00")
+KEEPALIVE   = b"\x00\x03\x07\xE3"
+RESET       = b"\x00\x03\x05\x80\x04\xff".ljust(64, b"\x00")
+WRITE       = b"\x00\x03\x05\x81\x0f"
+SAVE        = b"\x00\x03\x05\x82"
+DISCONNECT  = b"\x00\x03\x19\x88" # Disconnect? is sent on application exit 
 
 keymap = [
 b"\x00\x00\x00\x00\x00\x29\x00\x00\x00\x89\x00\x00\x00\x3a\x00\x00\x00\x3b\x00\x00\x00\x3c\x00\x00\x00\x3d\x00\x00\x00\x3e\x00\x00\x00\x3f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
@@ -37,24 +34,89 @@ b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x8a\x00\x00\x00\x88\x00\x00\x00\xe6\x00\x
 b"\x00\x00\x00\x00\x00\x51\x00\x00\x00\x4f\x00\x00\x00\x00\x00\x00\x00\x62\x00\x00\x00\x63\x00\x00\x00\x58\x00\x00\x00\x00\x00\x78\x56\x34\x12\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
 ]
 
-def send(data):
-    print("->", data)
-    if device.write(data) < 0: 
+def stripnulls(resp):
+
+    l = None
+    for i in range(len(resp), 0):
+        if resp[i] != b'\x00':
+            print("break", i)
+            l=i
+            break
+
+    return resp[0:l]
+
+
+def send(device, data):
+    if device.write(data.ljust(64, b"\x00")) < 0: 
         raise "Write failed"
 
     resp = device.read(64, timeout_ms=500)
-    print("<-", ' '.join(map(hex, resp)))
+    print("<-", end="")
+    print(bytearray(resp).rstrip(b'\x00'))
 
 
-send(PING)
-send(RESET)
 
-for i, d in enumerate(keymap):
-    print(i)
-    send(b''.join([b"\x00\x03\x05\x81\x0f", pack('b', i), d]))
 
-send(SAVE)
-send(PING)
+def reprogram():
+    device_info = next(device for device in hid.enumerate() if device['vendor_id'] == VENDOR_ID and device['product_id'] == PRODUCT_ID and device['interface_number'] == 2 )
 
-device.close()
+    device = hid.device()
+    device.open_path(device_info['path'])
+
+    send(device, KEEPALIVE)
+    send(device, RESET)
+
+    for i, d in enumerate(keymap):
+        send(device, b''.join([WRITE, pack('b', i), d]))
+
+    send(device, SAVE)
+    send(device, KEEPALIVE)
+    send(device, DISCONNECT) 
+    device.close()
+
+
+
+if __name__ == '__main__':
+    for i, d in enumerate(keymap):
+        N = 9
+        row = d[2:2+N*4]
+        print(i, end='\t')
+        for c in unpack(N*'4s', row):
+            print("%10s" % c.hex(),end='\t')
+        print("")
+
+        keynames = dict()
+        keynames[0x28] = "Enter"
+        keynames[0x49] = "Insert"
+        keynames[0xE0] = "LCtrl"
+        keynames[0xE1] = "LShift"
+        keynames[0xE2] = "LAlt"
+        keynames[0xE3] = "LWindows"
+        keynames[0xE4] = "RCtrl"
+        keynames[0xE5] = "RShift"
+        keynames[0xE6] = "RAlt"
+        keynames[0xE7] = "Space"
+
+        print('', end='\t')
+        for c in unpack('>'  + N*'I', row):
+            if c in keynames:
+                print("%10s" % keynames[c], end='\t')
+            elif c>=0x1e and c< 0x1E+11:
+                # f1-f9
+                print("       '%s'" % (1+c-0x1e), end='\t')
+            elif c>=0x3A and c< 0x3A+9:
+                # 0-9
+                print("       f%s" % (1+c-0x3A), end='\t')
+            elif c>=4 and c<(26+4):
+                # a-z
+                print("%10s" % chr(ord('a')+c-4), end='\t')
+            elif c > 255:
+                print("%10x" % c, end='\t')
+            else:
+                print("%10s" % c, end='\t')
+
+        print("")
+        print("")
+
+    #reprogram()
 
