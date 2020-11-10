@@ -3,6 +3,7 @@
 import sys
 import hid # pip install hidapi
 from struct import pack, unpack
+import csv
 
 VENDOR_ID = 0x2f68 
 PRODUCT_ID = 0x0082 # DURGOD Taurus K320:
@@ -10,7 +11,11 @@ TIMEOUT = 200
 
 KEEPALIVE   = b"\x00\x03\x07\xE3"
 RESET       = b"\x00\x03\x05\x80\x04\xff".ljust(64, b"\x00")
+
+N = 8
 WRITE       = b"\x00\x03\x05\x81\x0f\x00\x00"
+WRITE_RESP  = b"\x83\x05\x81\x0f\x00\x00\x00h"
+
 SAVE        = b"\x00\x03\x05\x82"
 DISCONNECT  = b"\x00\x03\x19\x88" # Disconnect? is sent on application exit 
 
@@ -49,7 +54,6 @@ KEYNAMES[0xE7] = 'RWindows'
 
 KEYNAMES[0x2B] = 'Tab'
 KEYNAMES[0x39] = 'CapsLock'
-
 KEYNAMES[0x2a] = 'Backspace'
 KEYNAMES[0x4a] = 'Pos1'
 KEYNAMES[0x4b] = 'PageUp'
@@ -64,18 +68,25 @@ KEYNAMES[0x46] = 'Print'
 KEYNAMES[0x47] = 'Roll'
 KEYNAMES[0x48] = 'Roll'
 
+# f1-f12
+for i in range(0,12):
+    KEYNAMES[0x3A+i] = "f%d" % (i+1)
+
+# 0-9
+for i in range(0,9):
+    KEYNAMES[0x1E+i] = "%d" % (i+1)
+# a-z
+for c in range(0,26):
+    KEYNAMES[4+c] = chr(ord('a')+c)
 
 
-def stripnulls(resp):
 
-    l = None
-    for i in range(len(resp), 0):
-        if resp[i] != b'\x00':
-            print("break", i)
-            l=i
-            break
+def connect():
+    device_info = next(device for device in hid.enumerate() if device['vendor_id'] == VENDOR_ID and device['product_id'] == PRODUCT_ID and device['interface_number'] == 2 )
 
-    return resp[0:l]
+    device = hid.device()
+    device.open_path(device_info['path'])
+    return device
 
 
 def send(device, data):
@@ -84,22 +95,22 @@ def send(device, data):
 
     resp = device.read(64, timeout_ms=500)
     print("<-", end="")
-    print(bytearray(resp).rstrip(b'\x00'))
+    resp = bytearray(resp).rstrip(b'\x00')
+    print(resp)
+    return resp
 
 
 
-
-def reprogram():
-    device_info = next(device for device in hid.enumerate() if device['vendor_id'] == VENDOR_ID and device['product_id'] == PRODUCT_ID and device['interface_number'] == 2 )
-
-    device = hid.device()
-    device.open_path(device_info['path'])
+def reprogram(keymap):
+    device = connect()
 
     send(device, KEEPALIVE)
     send(device, RESET)
 
     for i, d in enumerate(keymap):
-        send(device, b''.join([WRITE, pack('b', i), d]))
+        resp = send(device, b''.join([WRITE, pack('b', i), d]))
+        if resp != bytearray(WRITE_RESP):
+            raise Exception(f"Bad response f{resp}")
 
     send(device, SAVE)
     send(device, KEEPALIVE)
@@ -107,36 +118,58 @@ def reprogram():
     device.close()
 
 
-
-if __name__ == '__main__':
-    N = 8
+def print_keymap(keymap):
     ROW_LENGTH = 21
 
     keymap_parsed = []
-    for d in keymap:
-        row = d[0:N*4]
+    for arg in keymap:
+        row = arg[0:N*4]
         keymap_parsed += unpack('>'  + N*'I', row)
-
     for i, c in enumerate(keymap_parsed):
         if (i % ROW_LENGTH) == 0:
             print("")
         if c in KEYNAMES:
             print("%10s" % KEYNAMES[c], end='\t')
-        elif c>=0x1E and c<0x1E+9:
-            # 1-9
-            print("         %s" % (1+c-0x1e), end='\t')
-        elif c>=0x3A and c<0x3A+12:
-            # f1-f12
-            keyname = 'f%s' % (1+c-0x3A)
-            print("%10s" % keyname, end='\t')
-        elif c>=4 and c<(26+4):
-            # a-z
-            print("%10s" % chr(ord('a')+c-4), end='\t')
         else:
-            print("%9xh" % c, end='\t')
+            print("%10xh" % c, end='\t')
 
-        #TODO: 12000000
+        #TODO: there is some other data in the end 12000000
     print("")
 
-    #reprogram()
+def chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
+def read_keymap(path):
+    keymap = []
+    with open(path) as f:
+        for lineNr, line in enumerate(csv.reader(f, delimiter='\t')):
+            if line[-1] == '':
+                # ignore tailing tabs (useful when reformatting)
+                line = line[0:-1]
+            for keyname in line:
+                keyname = keyname.strip()
+                keycode = next((name for name, value in KEYNAMES.items() if value == keyname), None)
+                if not keycode is None:
+                    keymap.append(keycode)
+                elif keyname.endswith('h'):
+                    keymap.append(int(keyname[:-1], 16))
+                else:
+                    raise Exception(f"[{lineNr}]: Invalid key '{keyname}'")
+    return keymap
+
+
+def format_reprogram_command(data):
+    r = b''
+    for key in data:
+       r += pack('>I', key)
+    return r
+
+if __name__ == '__main__':
+    loaded_keymap = read_keymap('map3')
+   
+    commands = [format_reprogram_command(cmd) for cmd in chunks(loaded_keymap, 8)]
+    extra = b"\x78\x56\x34\x12"
+    commands[-1] = commands[-1][0:29] + extra
+    print_keymap(keymap)
+    reprogram(keymap)
