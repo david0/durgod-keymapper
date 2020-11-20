@@ -4,20 +4,21 @@ import sys
 import hid # pip install hidapi
 from struct import pack, unpack
 import csv
+import logging
 
 VENDOR_ID = 0x2f68 
 PRODUCT_ID = 0x0082 # DURGOD Taurus K320:
 TIMEOUT = 200
 
-KEEPALIVE   = b"\x00\x03\x07\xE3"
-RESET       = b"\x00\x03\x05\x80\x04\xff".ljust(64, b"\x00")
+KEEPALIVE   = b"\x03\x07\xE3"
+RESET       = b"\x03\x05\x80\x04\xff".ljust(64, b"\x00")
 
 N = 8
-WRITE       = b"\x00\x03\x05\x81\x0f\x00\x00"
-WRITE_RESP  = b"\x83\x05\x81\x0f\x00\x00\x00h"
+WRITE       = b"\x03\x05\x81\x0f"
+WRITE_RESP  = b"\x83\x05\x81\x0f"
 
-SAVE        = b"\x00\x03\x05\x82"
-DISCONNECT  = b"\x00\x03\x19\x88" # Disconnect? is sent on application exit 
+SAVE        = b"\x03\x05\x82"
+DISCONNECT  = b"\x03\x19\x88" # Disconnect? is sent on application exit 
 
 KEYNAMES = dict()
 KEYNAMES[0x28] = 'Enter'
@@ -48,6 +49,10 @@ KEYNAMES[0x46] = 'Print'
 KEYNAMES[0x47] = 'Roll'
 KEYNAMES[0x48] = 'Roll'
 
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logger = logging.getLogger("wire")
+
 # f1-f12
 for i in range(0,12):
     KEYNAMES[0x3A+i] = "f%d" % (i+1)
@@ -68,15 +73,18 @@ def connect():
 
 
 def send(device, data):
-    if device.write(data.ljust(64, b"\x00")) < 0: 
+    logger.info("send %s", tohex(data))
+    if device.write(b'\x00' + data.ljust(64, b"\x00")) < 0: 
         raise "Write failed"
 
     resp = device.read(64, timeout_ms=500)
-    print("<-", end="")
     resp = bytearray(resp).rstrip(b'\x00')
-    print(resp)
+    logger.info("recv %s", tohex(resp))
     return resp
 
+
+def tohex(data):
+    return ' '.join(map(lambda x: "%02x" % x, data))
 
 
 def reprogram(keymap):
@@ -86,8 +94,8 @@ def reprogram(keymap):
     send(device, RESET)
 
     for i, d in enumerate(keymap):
-        resp = send(device, b''.join([WRITE, pack('b', i), d]))
-        if resp != bytearray(WRITE_RESP):
+        resp = send(device, b''.join([WRITE, pack('b', i), b'\x00\x00', d]))
+        if resp[0:4] != WRITE_RESP:
             raise Exception(f"Bad response f{resp}")
 
     send(device, SAVE)
@@ -114,9 +122,11 @@ def print_keymap(keymap):
 
     print("")
 
+
 def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
+
 
 def read_keymap(path):
     keymap = []

@@ -16,4 +16,4 @@ USE ON YOUR OWN RISK.
 
     ./remap.py keymaps/taurus_k320
 
-
+After running I have to activate the profile on my keyboard using `Fn`+ `MR`(F12)
