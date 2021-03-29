@@ -47,7 +47,7 @@ KEYNAMES[0x52] = 'Up'
 KEYNAMES[0x4f] = 'Right'
 KEYNAMES[0x46] = 'Print'
 KEYNAMES[0x47] = 'Roll'
-KEYNAMES[0x48] = 'Roll'
+KEYNAMES[0x48] = 'Break'
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
