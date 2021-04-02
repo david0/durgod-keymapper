@@ -1,0 +1,19 @@
+Ubuntu installation and usage instructions
+Tested on kubuntu 20.10.
+The pip installs may be redundant, as apt may be doing the same thing.
+
+
+First you will need some libraries:
+pip install hid
+pip install hidapi
+sudo apt install python3-hidapi libhidapi-dev python3-hid
+
+The script needs to run as root:
+
+turn off the MR mapping [M] light should be off
+sudo ./remap.py keymaps/taurus_k320  (this will give you a listing of the standard key codes)
+sudo ./remap.py keymaps/taurus_k320-dvorak 
+turn on the MR mapping [M] light should on and new dvorak mapping installed.
+
+Now my K320 works in dvorak mode!  
+The durgod windows utility as of 1.0.2.2 still fails to remap the "_" underscore key correctly.
