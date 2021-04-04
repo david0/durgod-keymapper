@@ -16,7 +16,7 @@ USE ON YOUR OWN RISK.
 
 1. Ensure the custom profile is not active. The ![custom profile symbol](custom_profile_symbol.png) light should be off
 2. Reprogram the custom profile using:
-
-    ./remap.py keymaps/taurus_k320
-
+```
+./remap.py keymaps/taurus_k320
+```
 3. Activate the custom profile using `Fn`+`F12` ![custom profile symbol](custom_profile_symbol.png) should light up
