@@ -3,4 +3,4 @@
        Tab	         q	         w	         e	         r	         t	         y	         u	         i	         o	         p	       2fh	       30h	       31h	    Delete	       End	  PageDown	       5fh	       60h	       61h	       57h	
   CapsLock	         a	         s	         d	         f	         g	         h	         j	         k	         l	       33h	       34h	       32h	     Enter	    Delete	       End	  PageDown	       5ch	       5dh	       5eh	       85h	
     LShift	       64h	         z	         x	         c	         v	         b	         n	         m	       36h	       37h	       38h	       87h	    RShift	        0h	        Up	        0h	       59h	       5ah	       5bh	        0h	
-     LCtrl	      LAlt	  LWindows	       8bh	        0h	        0h	     Space	        0h	       8ah	       88h	      RAlt	    10000h	  RWindows	     RCtrl	      Left	      Down	     Right	        0h	       62h	       63h	       58h	
+     LCtrl	  LWindows	      LAlt	       8bh	        0h	        0h	     Space	        0h	       8ah	       88h	      RAlt	    10000h	  RWindows	     RCtrl	      Left	      Down	     Right	        0h	       62h	       63h	       58h	
